@@ -32,6 +32,8 @@ fun copyFromAssets(assetFile:String):File {
     return outFile;
 }
 
+//TODO: https://gitlab.com/fengshaun/syncopoli
+
 /**
  * Instrumented test, which will execute on an Android device.
  *
@@ -66,6 +68,7 @@ class ExampleInstrumentedTest {
         Log.e(TAG, rshArg.toString());
 
         runBlocking {
+            //TODO: this isn't running so changing target level probably broke this
             process("chmod", "777", binary, stdout = Redirect.CAPTURE).unwrap()
             val ls1 = process("ls", "-l", binary, stdout = Redirect.CAPTURE).unwrap()
             Log.d(TAG, "Success:\n${ls1.joinToString("\n")}")
