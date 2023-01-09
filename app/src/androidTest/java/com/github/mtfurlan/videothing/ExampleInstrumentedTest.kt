@@ -4,6 +4,12 @@ import android.util.Log
 import      java.io.BufferedReader
 import      java.io.InputStreamReader
 
+
+import com.github.pgreze.process.process
+import com.github.pgreze.process.Redirect
+import com.github.pgreze.process.unwrap
+import kotlinx.coroutines.runBlocking
+
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 
@@ -25,15 +31,6 @@ fun copyFromAssets(assetFile:String):File {
     return outFile;
 }
 
-fun logProcess(process:Process) {
-    var output: String = ""
-    val inputStream =  BufferedReader(InputStreamReader(process.getInputStream()))
-    while ( inputStream.readLine()?.also { output = it } != null) {
-        Log.d("FOO", "Debug: " + output)
-    }
-    inputStream.close()
-    process.waitFor()
-}
 /**
  * Instrumented test, which will execute on an Android device.
  *
@@ -49,37 +46,30 @@ class ExampleInstrumentedTest {
         assertEquals("com.github.mtfurlan.videothing", appContext.packageName);
 
 
-        val dir = appContext.getExternalFilesDir("foo")
-        val file = File(dir, "somefile.txt")
+        val file = File(appContext.getFilesDir(), "testFile")
         file.printWriter().use { out ->
             out.println("test")
         }
 
         val rsync = copyFromAssets("rsync")
         rsync.setExecutable(true);
-        //val sshKey = copyFromAssets("skynet_rsa")
+        val sshKey = copyFromAssets("skynet_rsa")
 
         val binary = rsync.getAbsolutePath()
-        //val rshArg = "-rsh 'ssh -p 22222 -i " + sshKey.getAbsolutePath() + "'"
+        val rshArg = "--rsh 'ssh -p 22222 -i " + sshKey.getAbsolutePath() + "'"
         Log.e(TAG, binary.toString());
-        //Log.e(TAG, rshArg.toString());
+        Log.e(TAG, rshArg.toString());
 
-        val ls1 = ProcessBuilder("ls", "-l", binary)
-            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            .start()
-        logProcess(ls1);
-        val ls2 = ProcessBuilder("ls", "-l", file.getAbsolutePath())
-            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-            .start()
-        logProcess(ls2);
-        //val process = ProcessBuilder(binary,
-        //                        rshArg,
-        //                        file.getAbsolutePath(),
-        //                        "mark@space.i3detroit.org:/tmp/")
-        //    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-        //    .start()
-        //logProcess(process);
+        runBlocking {
+            val ls1 = process("ls", "-l", binary, stdout = Redirect.CAPTURE).unwrap()
+            Log.d(TAG, "Success:\n${ls1.joinToString("\n")}")
 
+            val ls2 = process("ls", "-l", file.getAbsolutePath(), stdout = Redirect.CAPTURE).unwrap()
+            Log.d(TAG, "Success:\n${ls2.joinToString("\n")}")
+
+            val rs1 = process(binary, "-h", stdout = Redirect.CAPTURE).unwrap()
+            Log.d(TAG, "Success:\n${rs1.joinToString("\n")}")
+        }
 
         //deleting the file
         file.delete();
