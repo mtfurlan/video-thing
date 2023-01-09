@@ -25,6 +25,7 @@ import java.io.File;
 fun copyFromAssets(assetFile:String):File {
     val appContext = InstrumentationRegistry.getInstrumentation().targetContext;
     val outFile = File(appContext.getFilesDir(), assetFile)
+    //val outFile = File("/sdcard/Android/data/com.github.mtfurlan.videothing/", assetFile)
     if (!outFile.exists()) {
         appContext.assets.open(assetFile).copyTo(outFile.outputStream())
     }
@@ -51,23 +52,33 @@ class ExampleInstrumentedTest {
             out.println("test")
         }
 
-        val rsync = copyFromAssets("rsync")
-        rsync.setExecutable(true);
+        //val rsync = copyFromAssets("rsync")
+        //rsync.setExecutable(true);
+        val rsyncPath = File(appContext.getFilesDir(), "rsync").getAbsolutePath()
+        Log.d(TAG, "rsyncPath: " + rsyncPath);
+
         val sshKey = copyFromAssets("skynet_rsa")
 
-        val binary = rsync.getAbsolutePath()
+        //val binary = rsync.getAbsolutePath()
+        val binary = rsyncPath
         val rshArg = "--rsh 'ssh -p 22222 -i " + sshKey.getAbsolutePath() + "'"
         Log.e(TAG, binary.toString());
         Log.e(TAG, rshArg.toString());
 
         runBlocking {
+            process("chmod", "777", binary, stdout = Redirect.CAPTURE).unwrap()
             val ls1 = process("ls", "-l", binary, stdout = Redirect.CAPTURE).unwrap()
             Log.d(TAG, "Success:\n${ls1.joinToString("\n")}")
 
             val ls2 = process("ls", "-l", file.getAbsolutePath(), stdout = Redirect.CAPTURE).unwrap()
             Log.d(TAG, "Success:\n${ls2.joinToString("\n")}")
 
-            val rs1 = process(binary, "-h", stdout = Redirect.CAPTURE).unwrap()
+            val rs1 = process(binary,
+                            rshArg,
+                            file.getAbsolutePath(),
+                            "mark@space.i3detroit.org:/tmp/",
+                            "--help",
+                            stdout = Redirect.CAPTURE).unwrap()
             Log.d(TAG, "Success:\n${rs1.joinToString("\n")}")
         }
 
