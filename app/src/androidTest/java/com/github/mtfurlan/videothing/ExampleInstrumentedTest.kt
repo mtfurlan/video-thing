@@ -10,7 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
 
-import org.junit.Assert.*
+import org.junit.Assert
 import java.io.BufferedReader
 import java.io.DataOutputStream
 
@@ -87,33 +87,28 @@ class ExampleInstrumentedTest {
         return 0
     }
 
-    @Throws(IOException::class, InterruptedException::class)
-    fun runCommand(context: Context, command: ArrayList<String>) {
+    class CommandResult{
+        var code:Int=0
+        var output:String=""
+    }
+    fun runCommand(context: Context, command: ArrayList<String>):CommandResult {
         val pb = ProcessBuilder(command)
         pb.directory(context.filesDir)
         pb.redirectErrorStream(true)
         val process = pb.start()
 
-        /*
-         * GET STDOUT/STDERR
-         */
+        // stdout/stderr are combined
         val reader = BufferedReader(InputStreamReader(process.inputStream))
-        var temp:String?
-        while (reader.readLine().also { temp = it } != null) {
-            Log.v(TAG, "output: $temp")
-        }
-        reader.close()
 
         // Wait for the command to finish.
         process.waitFor()
 
-        // Show message how it ended.
-        val errno = process.exitValue()
-        if (errno != 0) {
-            Log.v(TAG, "Sync FAILED (error code $errno).")
-        } else {
-            Log.v(TAG, "Sync complete.")
-        }
+        val ret = CommandResult();
+        ret.code = process.exitValue();
+        ret.output = reader.use { it.readText() }
+        Log.e(TAG, "ERROR: ${ret.code}");
+
+        return ret;
     }
 
     @Test
@@ -147,10 +142,15 @@ class ExampleInstrumentedTest {
         convertKeyCommand.add(dropbearKeyPath);
 
         Log.d(TAG, "dropbearconvert exec: " + convertKeyCommand.toString());
-        runCommand(context, convertKeyCommand);
+        val convertKeyResult = runCommand(context, convertKeyCommand);
+        if(convertKeyResult.code != 0) {
+            Log.e(TAG, "dropbearconvert failed: ${convertKeyResult.code}");
+            Log.e(TAG, convertKeyResult.output);
+            Assert.fail("dropbearconvert failed: ${convertKeyResult.code}");
+        }
 
         if (!dropbearKey.exists()) {
-            Log.e(TAG, "Failed to convert dropbear key");
+            Assert.fail("Failed to convert dropbear key");
         }
 
         val rsyncCommand = arrayListOf<String>()
@@ -164,12 +164,17 @@ class ExampleInstrumentedTest {
 
         Log.d(TAG, "rsync exec: " + rsyncCommand.toString());
 
-        runCommand(context, rsyncCommand);
+        val rsyncResult = runCommand(context, rsyncCommand);
+        if(rsyncResult.code != 0) {
+            Log.e(TAG, "rsync failed: ${rsyncResult.code}");
+            Log.e(TAG, rsyncResult.output);
+            Assert.fail("rsync failed: ${rsyncResult.code}");
+        }
 
 
-        //deleting the file
+        //cleanup
+        dropbearKey.delete();
         file.delete();
-        System.out.println("file deleted");
 
     }
 }
