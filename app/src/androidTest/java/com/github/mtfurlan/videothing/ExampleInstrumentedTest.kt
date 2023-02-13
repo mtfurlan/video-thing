@@ -36,68 +36,14 @@ class ExampleInstrumentedTest {
         return outFile;
     }
 
-    /*
-    fun copyExecutable(context: Context, filename: String): Int {
-        //TODO: can simplify a lot from copyFromAssets
-        // copy and overwrite
-        var src: InputStream? = null
-
+    fun installBinaryFromAssets(context: Context, filename: String): Int {
         // try to grab matching executable for a ABI supported by this device
+        var src: InputStream? = null
         for (abi in Build.SUPPORTED_ABIS) {
             src = try {
                 context.assets.open("$abi/$filename")
             } catch (e: IOException) {
                 // no need to close src here
-                Log.d(TAG, "$abi is not supported")
-                continue
-            }
-        }
-        if (src == null) {
-            Log.e(
-                TAG,
-                "Could not find supported rsync binary for ABI: " + Arrays.toString(Build.SUPPORTED_ABIS)
-            )
-            return -1
-        }
-        Log.d(TAG, "Found appropriate rsync binary: $src")
-        var dst: OutputStream
-        try {
-            dst = DataOutputStream(context.openFileOutput(filename, Context.MODE_PRIVATE))
-            val data = ByteArray(4096)
-            var count: Int
-            while (src.read(data).also { count = it } != -1) {
-                dst.write(data, 0, count)
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "Error copying executable: $e")
-            return -1
-        }
-        try {
-            src.close()
-            dst.close()
-        } catch (e: IOException) {
-            Log.e(TAG, "Error closing input or output stream: $e")
-        }
-        val f = File(context.filesDir, filename)
-        try {
-            f.setExecutable(true)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Error setting executable flag: $e")
-            return -1
-        }
-        return 0
-    }
-    */
-    fun copyExecutable(context: Context, filename: String): Int {
-        var src: InputStream? = null
-
-        // try to grab matching executable for a ABI supported by this device
-        for (abi in Build.SUPPORTED_ABIS) {
-            src = try {
-                context.assets.open("$abi/$filename")
-            } catch (e: IOException) {
-                // no need to close src here
-                Log.d(TAG, "$abi is not supported")
                 continue
             }
         }
@@ -107,9 +53,16 @@ class ExampleInstrumentedTest {
         }
         val outFile = File(context.getFilesDir(), filename)
 
-        src.copyTo(outFile.outputStream())
-        outFile.outputStream().close()
-        src.close()
+        val dst = outFile.outputStream();
+
+        try {
+            src.copyTo(dst);
+            src.close()
+            dst.close()
+        } catch (e: IOException) {
+            Log.e(TAG, "Error copying file: $e")
+            return -1;
+        }
 
         try {
             outFile.setExecutable(true)
@@ -124,9 +77,8 @@ class ExampleInstrumentedTest {
         var code:Int=0
         var output:String=""
     }
-    fun runCommand(context: Context, command: ArrayList<String>):CommandResult {
+    fun runCommand(command: ArrayList<String>):CommandResult {
         val pb = ProcessBuilder(command)
-        pb.directory(context.filesDir)
         pb.redirectErrorStream(true)
         val process = pb.start()
 
@@ -144,28 +96,16 @@ class ExampleInstrumentedTest {
         return ret;
     }
 
-    @Test
-    fun useAppContext() {
-        // Context of the app under test.
-        val context = InstrumentationRegistry.getInstrumentation().targetContext;
-
-        val file = File(context.getFilesDir(), "testFile")
-        file.printWriter().use { out ->
-            out.println("test")
-        }
-
-        copyExecutable(context, "rsync");
-        copyExecutable(context, "ssh");
-        copyExecutable(context, "dropbearconvert");
-
-        val rsyncPath = File(context.getFilesDir(), "rsync").getAbsolutePath()
-        val sshPath = File(context.getFilesDir(), "ssh").getAbsolutePath();
-        val dropbearConvertPath = File(context.getFilesDir(), "dropbearconvert").getAbsolutePath();
-
-
-        val sshKeyPath = copyFromAssets("skynet_ed25519").getAbsolutePath();
+    /**
+     * convert openssh key to dropbear and save to context.getFilesDir()/tmp_key
+     *
+     * Note: caller is responsible for deleting the file
+     * @returns File of converted key
+     **/
+    fun makeTmpDropbearKey(context:Context, sshKeyPath:String): File {
         val dropbearKey = File(context.getFilesDir(), "tmp_key");
         val dropbearKeyPath = dropbearKey.getAbsolutePath();
+        val dropbearConvertPath = File(context.getFilesDir(), "dropbearconvert").getAbsolutePath();
 
         val convertKeyCommand = arrayListOf<String>()
         convertKeyCommand.add(dropbearConvertPath);
@@ -174,30 +114,57 @@ class ExampleInstrumentedTest {
         convertKeyCommand.add(sshKeyPath);
         convertKeyCommand.add(dropbearKeyPath);
 
-        Log.d(TAG, "dropbearconvert exec: " + convertKeyCommand.toString());
-        val convertKeyResult = runCommand(context, convertKeyCommand);
+        val convertKeyResult = runCommand(convertKeyCommand);
         if(convertKeyResult.code != 0) {
-            Log.e(TAG, "dropbearconvert failed: ${convertKeyResult.code}");
+            Log.e(TAG, "failed to convert ssh key, dropbearconvert returned ${convertKeyResult.code}");
             Log.e(TAG, convertKeyResult.output);
-            Assert.fail("dropbearconvert failed: ${convertKeyResult.code}");
+            throw Exception("failed to convert ssh key, dropbearconvert returned ${convertKeyResult.code}");
         }
 
         if (!dropbearKey.exists()) {
-            Assert.fail("Failed to convert dropbear key");
+            throw Exception("Failed to convert dropbear key");
         }
+
+        return dropbearKey;
+    }
+
+    fun installBinaries(context:Context) {
+        installBinaryFromAssets(context, "rsync");
+        installBinaryFromAssets(context, "ssh");
+        installBinaryFromAssets(context, "dropbearconvert");
+    }
+
+    @Test
+    fun actuallyRsyncAFile() {
+        // Context of the app under test.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext;
+
+        val file = File(context.getFilesDir(), "testFile")
+        file.printWriter().use { out ->
+            out.println("test")
+        }
+
+
+        val rsyncPath = File(context.getFilesDir(), "rsync").getAbsolutePath()
+        val sshPath = File(context.getFilesDir(), "ssh").getAbsolutePath();
+
+
+        val sshKeyPath = copyFromAssets("skynet_ed25519").getAbsolutePath();
+
+        val dropbearKey = makeTmpDropbearKey(context, sshKeyPath);
 
         val rsyncCommand = arrayListOf<String>()
         rsyncCommand.add(rsyncPath);
         //dropbear doesn't do UserKnownHostsFile so we just live with errors
         // -y is dropbear for -oStrictHostKeyChecking=no
         rsyncCommand.add("--rsh");
-        rsyncCommand.add("$sshPath -p 22222 -i $dropbearKeyPath -y");
+        rsyncCommand.add("$sshPath -p 22222 -i ${dropbearKey.getAbsolutePath()} -y");
         rsyncCommand.add(file.getAbsolutePath());
         rsyncCommand.add("mtfurlan@space.i3detroit.org:/tmp/");
 
         Log.d(TAG, "rsync exec: " + rsyncCommand.toString());
 
-        val rsyncResult = runCommand(context, rsyncCommand);
+        val rsyncResult = runCommand(rsyncCommand);
         if(rsyncResult.code != 0) {
             Log.e(TAG, "rsync failed: ${rsyncResult.code}");
             Log.e(TAG, rsyncResult.output);
