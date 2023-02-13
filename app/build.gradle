@@ -15,6 +15,17 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            ndkBuild {
+                targets 'ssh', 'dropbearconvert', 'rsync'
+                arguments 'NDK_LOG=1'
+            }
+        }
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'x86', 'arm64-v8a', 'x86_64'
+        }
+
     }
 
     buildTypes {
@@ -23,6 +34,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    externalNativeBuild {
+        ndkBuild {
+            path 'src/main/jni/Android.mk'
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -33,6 +50,33 @@ android {
     buildFeatures {
         viewBinding true
     }
+}
+
+gradle.taskGraph.afterTask { task ->
+	if (task.name == "externalNativeBuildRelease" || task.name == "externalNativeBuildDebug") {
+		def mode = "release"
+		if (task.name == "externalNativeBuildDebug") {
+			mode = "debug"
+		}
+		def src = rootProject.file("app/build/intermediates/ndkBuild/${mode}/obj/local/")
+		def dst = rootProject.file('app/src/main/assets/')
+
+		copy {
+			from(src) {
+				exclude "**/objs"
+				exclude "**/objs-debug"
+				exclude "**/*.a"
+				exclude "**/*.o"
+				exclude "**/*.d"
+			}
+
+			into dst
+		}
+	}
+}
+
+clean {
+	delete '.externalNativeBuild'
 }
 
 dependencies {
