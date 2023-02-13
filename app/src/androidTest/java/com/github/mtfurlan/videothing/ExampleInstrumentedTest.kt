@@ -108,10 +108,6 @@ class ExampleInstrumentedTest {
             throw Exception("failed to convert ssh key, dropbearconvert returned ${convertKeyResult.code}");
         }
 
-        if (!dropbearKey.exists()) {
-            throw Exception("Failed to convert dropbear key");
-        }
-
         return dropbearKey;
     }
 
@@ -159,6 +155,8 @@ class ExampleInstrumentedTest {
         file.printWriter().use { out ->
             out.println("test")
         }
+
+        installBinaries(context);
 
         val sshKeyPath = copyFromAssets(context, "skynet_ed25519").getAbsolutePath();
 
