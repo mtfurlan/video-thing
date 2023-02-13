@@ -1,0 +1,42 @@
+From f9ca09d9fef4c8a727a1d6783fae3c7fba78ce13 Mon Sep 17 00:00:00 2001
+From: Mark <mark@fur.land>
+Date: Mon, 13 Feb 2023 14:26:31 -0500
+Subject: [PATCH] include build for dropbearconvert
+
+---
+ Android.mk | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/Android.mk b/Android.mk
+index 2a4a592..abe4939 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -58,4 +58,25 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/libtomcrypt/src/headers
+ include $(BUILD_EXECUTABLE)
+ 
+ 
++include $(CLEAR_VARS)
++
++COMMON_SRC_FILES := \
++dbutil.c buffer.c dbhelpers.c dss.c bignum.c \
++signkey.c rsa.c dbrandom.c queue.c atomicio.c compat.c fake-rfc2553.c \
++ltc_prng.c ecc.c ecdsa.c crypto_desc.c curve25519.c ed25519.c dbmalloc.c \
++gensignkey.c gendss.c genrsa.c gened25519.c
++
++LOCAL_SRC_FILES := dropbearconvert.c keyimport.c $(COMMON_SRC_FILES)
++LOCAL_STATIC_LIBRARIES := libtomcrypt libtommath
++
++LOCAL_MODULE_PATH := $(TARGET_OUT_OPTIONAL_EXECUTABLES)
++LOCAL_MODULE_TAGS := debug
++LOCAL_MODULE := dropbearconvert
++LOCAL_C_INCLUDES += $(LOCAL_PATH)/libtommath
++LOCAL_C_INCLUDES += $(LOCAL_PATH)/libtomcrypt/src/headers
++LOCAL_CFLAGS += -DDROPBEAR_SVR_PASSWORD_AUTH=0
++
++include $(BUILD_EXECUTABLE)
++
++
+ include $(call all-makefiles-under,$(LOCAL_PATH))
+-- 
+2.30.2
+
