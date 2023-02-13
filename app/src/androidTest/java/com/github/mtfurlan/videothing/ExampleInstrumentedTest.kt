@@ -36,6 +36,7 @@ class ExampleInstrumentedTest {
         return outFile;
     }
 
+    /*
     fun copyExecutable(context: Context, filename: String): Int {
         //TODO: can simplify a lot from copyFromAssets
         // copy and overwrite
@@ -80,6 +81,38 @@ class ExampleInstrumentedTest {
         val f = File(context.filesDir, filename)
         try {
             f.setExecutable(true)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Error setting executable flag: $e")
+            return -1
+        }
+        return 0
+    }
+    */
+    fun copyExecutable(context: Context, filename: String): Int {
+        var src: InputStream? = null
+
+        // try to grab matching executable for a ABI supported by this device
+        for (abi in Build.SUPPORTED_ABIS) {
+            src = try {
+                context.assets.open("$abi/$filename")
+            } catch (e: IOException) {
+                // no need to close src here
+                Log.d(TAG, "$abi is not supported")
+                continue
+            }
+        }
+        if (src == null) {
+            Log.e( TAG, "Could not find supported rsync binary for ABI: " + Arrays.toString(Build.SUPPORTED_ABIS))
+            return -1
+        }
+        val outFile = File(context.getFilesDir(), filename)
+
+        src.copyTo(outFile.outputStream())
+        outFile.outputStream().close()
+        src.close()
+
+        try {
+            outFile.setExecutable(true)
         } catch (e: SecurityException) {
             Log.e(TAG, "Error setting executable flag: $e")
             return -1
